@@ -1526,29 +1526,52 @@ function formKey(t){ return String(t.id).split('_').slice(2).join('_'); } // sch
 function b64url(u){ return bufToB64(u).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 function unb64url(s){ s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while(s.length % 4) s += '='; return b64ToU8(s); }
 async function zip(u, how){ var st = new Blob([u]).stream().pipeThrough(how === 'in' ? new DecompressionStream('deflate-raw') : new CompressionStream('deflate-raw')); return new Uint8Array(await new Response(st).arrayBuffer()); }
+/* Link format 2: deflate( [4-byte JSON length][JSON][signature bitmaps] ). Signatures travel as 1-bit bitmaps (much
+   smaller than a PNG), listed in JSON "s": [[field, width, height], ...], and are turned back into PNGs on the preceptor's page.
+   Format 1 (JSON only) is still read. */
+var SIG_W = 280, SIG_H = 100;
+function sigBitmap(v){
+  return new Promise(function(res){
+    var img = new Image();
+    img.onload = function(){
+      var k = Math.min(1, SIG_W / img.width, SIG_H / img.height), w = Math.max(1, Math.round(img.width * k)), h = Math.max(1, Math.round(img.height * k));
+      var c = document.createElement('canvas'); c.width = w; c.height = h; var g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+      var a = g.getImageData(0, 0, w, h).data, rb = Math.ceil(w / 8), bits = new Uint8Array(rb * h);
+      for(var y = 0; y < h; y++) for(var x = 0; x < w; x++) if(a[(y * w + x) * 4 + 3] > 90) bits[y * rb + (x >> 3)] |= 0x80 >> (x & 7);
+      res({w: w, h: h, bits: bits});
+    };
+    img.onerror = function(){ res(null); }; img.src = v;
+  });
+}
+function bitmapPng(w, h, bits){
+  var c = document.createElement('canvas'); c.width = w; c.height = h; var g = c.getContext('2d'), d = g.createImageData(w, h), rb = Math.ceil(w / 8);
+  for(var y = 0; y < h; y++) for(var x = 0; x < w; x++) if(bits[y * rb + (x >> 3)] & (0x80 >> (x & 7))){ var i = (y * w + x) * 4; d.data[i] = 11; d.data[i + 1] = 31; d.data[i + 2] = 92; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0); return c.toDataURL('image/png');
+}
 async function encodeLink(obj){
-  var u = new TextEncoder().encode(JSON.stringify(obj));
-  if(typeof CompressionStream !== 'undefined'){ try{ return '1z.' + b64url(await zip(u, 'out')); }catch(e){} }
-  return '1j.' + b64url(u);
+  obj = JSON.parse(JSON.stringify(obj)); var sigs = [], parts = [];
+  for(var k in (obj.p || {})){ if(isSig(obj.p[k])){ var bm = await sigBitmap(obj.p[k]); delete obj.p[k]; if(bm){ sigs.push([k, bm.w, bm.h]); parts.push(bm.bits); } } }
+  if(sigs.length) obj.s = sigs;
+  var js = new TextEncoder().encode(JSON.stringify(obj)), n = 4 + js.length + parts.reduce(function(t, q){ return t + q.length; }, 0), u = new Uint8Array(n), o = 4;
+  u[0] = js.length >>> 24; u[1] = (js.length >>> 16) & 255; u[2] = (js.length >>> 8) & 255; u[3] = js.length & 255; u.set(js, 4); o += js.length;
+  parts.forEach(function(q){ u.set(q, o); o += q.length; });
+  if(typeof CompressionStream !== 'undefined'){ try{ return '2z.' + b64url(await zip(u, 'out')); }catch(e){} }
+  return '2j.' + b64url(u);
 }
 async function decodeLink(h){
-  h = String(h || '').replace(/^#/, ''); var m = /^1([zj])\.([A-Za-z0-9_-]+)$/.exec(h); if(!m) throw new Error('bad');
-  var u = unb64url(m[2]);
-  if(m[1] === 'z'){ if(typeof DecompressionStream === 'undefined') throw new Error('old'); u = await zip(u, 'in'); }
-  return JSON.parse(new TextDecoder().decode(u));
-}
-// a smaller copy of a signature, so the link stays short
-function shrinkSig(v){
-  return new Promise(function(res){
-    try{ var img = new Image(); img.onload = function(){ var k = Math.min(1, 300 / img.width, 110 / img.height);
-      var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
-      var g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
-      // two colors only (ink or nothing): a much smaller PNG, still a clean signature
-      var d = g.getImageData(0, 0, c.width, c.height), a = d.data;
-      for(var i = 0; i < a.length; i += 4){ var on = a[i + 3] > 90; a[i] = 11; a[i + 1] = 31; a[i + 2] = 92; a[i + 3] = on ? 255 : 0; }
-      g.putImageData(d, 0, 0); var out = c.toDataURL('image/png'); res(out.length < v.length ? out : v); };
-      img.onerror = function(){ res(v); }; img.src = v; }catch(e){ res(v); }
+  h = String(h || '').replace(/^#/, ''); var m = /^([12])([zj])\.([A-Za-z0-9_-]+)$/.exec(h); if(!m) throw new Error('bad');
+  var u = unb64url(m[3]);
+  if(m[2] === 'z'){ if(typeof DecompressionStream === 'undefined') throw new Error('old'); u = await zip(u, 'in'); }
+  if(m[1] === '1') return JSON.parse(new TextDecoder().decode(u));
+  var n = (u[0] << 24 | u[1] << 16 | u[2] << 8 | u[3]) >>> 0; if(n + 4 > u.length) throw new Error('bad');
+  var obj = JSON.parse(new TextDecoder().decode(u.subarray(4, 4 + n))), o = 4 + n;
+  obj.p = obj.p || {};
+  (Array.isArray(obj.s) ? obj.s : []).forEach(function(q){
+    var w = +q[1], hh = +q[2], len = Math.ceil(w / 8) * hh;
+    if(!(w > 0 && w <= 2000 && hh > 0 && hh <= 2000) || o + len > u.length) throw new Error('bad');
+    obj.p[String(q[0])] = bitmapPng(w, hh, u.subarray(o, o + len)); o += len;
   });
+  delete obj.s; return obj;
 }
 function lockedHtml(f, v, fl){
   var lab = (f.code ? '<span class="ff-code">' + esc(f.code) + '</span>' : '') + esc(f.label) + '<span class="ff-who ff-who-student">From the student</span>';
@@ -1600,7 +1623,7 @@ function sendHtml(t, fl){
     var l = S.made;
     return '<div class="card ff-send"><div class="ff-h3">Link ready for your preceptor</div>' +
       '<div class="ff-row"><button class="action" data-act="sendshare">Share link</button><button class="action secondary" data-act="sendcopy">Copy link</button><button class="action secondary" data-act="sendclose">Done</button></div>' +
-      '<div class="ff-status ff-sendmsg" role="status" aria-live="polite">' + esc(S.msg || '') + '</div>' +
+      '<div class="ff-status ff-sendmsg" role="status" aria-live="polite">' + esc(S.msg || '') + '</div>' + qrHtml(l.url, 'QR code: ' + l.tname + ' for your preceptor') +
       '<div class="panel-hint">Your preceptor emails the finished evaluation to <b>' + esc(l.to) + '</b>. The link works until ' + esc(fmtDate(l.expires)) + '. AnesPilot cannot see it or tell you when it is sent, so check with your coordinator.</div></div>';
   }
   var nm = S.name != null ? S.name : (fl.values.student || profName() || '');
@@ -1629,15 +1652,21 @@ async function createLink(){
   if(phi.length) return say('Remove possible patient identifiers first: ' + phi.slice(0, 3).join('; ') + (phi.length > 3 ? '...' : ''));
   V.busy = true; say('Making the link...');
   try{
-    for(var k in vals){ if(isSig(vals[k])) vals[k] = await shrinkSig(vals[k]); }
     var sc = schoolOf(t), expires = Date.now() + LINK_DAYS * 86400000;
     var obj = {v: 1, f: (t.id === COA_ID || t.id === ACP_ID) ? {b: t.id} : {c: sc.code, k: formKey(t)}, n: name, to: to, p: vals, fn: defaultName(t, fl), x: expires};
     var url = evalPage() + '#' + await encodeLink(obj);
     var l = {id: uid(), url: url, to: to, tid: t.id, tname: t.name, cat: catOf(t), student: name, created: Date.now(), expires: expires};
     linksPut([l].concat(links()).slice(0, 100));
-    V.send = {made: l, msg: url.length > 12000 ? 'This link is long because of your signature. If a text message cuts it off, use Copy link and send it by email.' : ''};
+    V.send = {made: l, msg: ''};
   }catch(err){ say('The link could not be made: ' + ((err && err.message) || 'unknown error')); V.busy = false; return; }
   V.busy = false; render(true);
+}
+// a QR code of the link, made on the device (qr.js); null if the link is too long for one
+function qrHtml(url, label){
+  if(typeof QR === 'undefined') return '';
+  try{ var q = QR.encode(url, {ecl: 'L'}); return '<div class="ff-qr"><div class="ff-qrbox">' + QR.svg(q, {border: 4, dark: '#000', light: '#fff', label: esc(label || 'QR code for the preceptor link')}) + '</div>' +
+    '<div class="ff-small ff-muted">Your preceptor scans this with their phone camera to open the form.</div></div>'; }
+  catch(e){ return '<div class="ff-small ff-muted">This link is too long for a QR code (long answers). Share or copy the link instead.</div>'; }
 }
 function linksHtml(cat){
   var now = Date.now(), ls = links().filter(function(l){ return (l.cat || 'eval') === cat; });
@@ -1647,8 +1676,9 @@ function linksHtml(cat){
     var open = !l.expires || now < l.expires;
     h += '<div class="ff-linkrow"><div><div class="ff-item-n">' + esc(l.tname) + '</div><div class="ff-item-s' + (open ? '' : ' ff-st-expired') + '">' + (open ? 'Open until ' + esc(fmtDate(l.expires)) : 'Expired') + '</div>' +
       '<div class="ff-muted ff-small">To ' + esc(l.to) + ' · made ' + esc(fmtDate(l.created)) + '</div></div>' +
-      '<div class="ff-item-b">' + (open ? '<button class="ff-link" data-act="linkshare" data-id="' + esc(l.id) + '">Share again</button>' : '') +
-      '<button class="ff-link ff-danger" data-act="linkforget" data-id="' + esc(l.id) + '">Remove</button></div></div>';
+      '<div class="ff-item-b">' + (open ? '<button class="ff-link" data-act="linkqr" data-id="' + esc(l.id) + '" aria-expanded="' + (V.qrOpen === l.id) + '">' + (V.qrOpen === l.id ? 'Hide QR' : 'Show QR') + '</button><button class="ff-link" data-act="linkshare" data-id="' + esc(l.id) + '">Share again</button>' : '') +
+      '<button class="ff-link ff-danger" data-act="linkforget" data-id="' + esc(l.id) + '">Remove</button></div></div>' +
+      (open && V.qrOpen === l.id ? qrHtml(l.url, 'QR code: ' + l.tname + ' for your preceptor') : '');
   });
   return h + '<div class="panel-hint">Your preceptor emails the evaluation from their own email. AnesPilot cannot see whether it was sent, so check with the person who receives it.</div></div>';
 }
@@ -1880,6 +1910,7 @@ async function onClick(e){
     case 'sendcopy': if(V.send && V.send.made){ var okc = await copyText(V.send.made.url); V.send.msg = okc ? 'Link copied. Paste it in a text or email to your preceptor.' : 'Select the link above and copy it.'; var sm = V.root.querySelector('.ff-sendmsg'); if(sm) sm.textContent = V.send.msg; } break;
     case 'linkshare': var ls1 = links().find(function(x){ return x.id === id; }); if(ls1) await shareUrl(ls1.url, ls1.tname); break;
     case 'linkforget': linksPut(links().filter(function(x){ return x.id !== id; })); render(true); break;
+    case 'linkqr': V.qrOpen = V.qrOpen === id ? null : id; render(true); break;
     /* preceptor page */
     case 'rcopy': var okr = await copyText(V.remote.link.to); setStatus(okr ? 'Address copied.' : 'Select the address and copy it.'); break;
     case 'rshare':
