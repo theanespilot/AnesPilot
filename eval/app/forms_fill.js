@@ -1449,7 +1449,8 @@ function fieldHtml(f, v, fl){
   var id = 'ffq-' + f.id, h ='<div class="ff-q' + (f.type === 'rating' ? ' ff-qr' : '') + qFlags(f, fl) + '" data-q="' + f.id + '">';
   var lab = (f.code ? '<span class="ff-code">' + esc(f.code) + '</span>' : '') + esc(f.label) + (f.who && f.badge ? '<span class="ff-who ff-who-' + f.who + '">' + (f.who === 'preceptor' ? 'Preceptor' : 'Student') + '</span>' : '');
   if(f.type === 'rating'){
-    h += '<div class="ff-ql" id="' + id + '">' + lab + '</div><div class="ff-chips" role="group" aria-labelledby="' + id + '">' +
+    var row = (f.options || []).length <= 6 && (f.options || []).every(function(o){ return String(o).length <= 5; }); // short choices: one row, side by side
+    h += '<div class="ff-ql" id="' + id + '">' + lab + '</div><div class="ff-chips' + (row ? ' ff-chips-row' : '') + '" role="group" aria-labelledby="' + id + '">' +
       (f.options || []).map(function(o){ return '<button class="ff-chip' + ((f.lowOpts ? f.lowOpts.indexOf(o) !== -1 : (o === 'Below' || o === 'Not met')) ? ' ff-chip-low' : '') + '" data-act="rate" data-f="' + f.id + '" data-o="' + esc(o) + '" aria-pressed="' + (v === o) + '"' + (COA_SCALE_LONG[o] && f.code ? ' title="' + COA_SCALE_LONG[o] + '"' : '') + '>' + esc(o) + '</button>'; }).join('') + '</div>';
     var cv = fl.values[f.id + '__c'] || '', open = !!cv || V.cOpen[f.id];
     if(f.comment || !V.curBuiltin) h += '<button class="ff-cbtn" data-act="cmt" data-f="' + f.id + '" aria-expanded="' + !!open + '">' + (cv ? '💬 Comment' : '+ Comment') + ' <span aria-hidden="true">' + (open ? '▴' : '▾') + '</span></button>' +
@@ -1474,11 +1475,12 @@ function viewFill(){
   var cnt = countDone(t, fl.values); V.curBuiltin = !!t.builtin || catOf(t) === 'acp' || t.fields.some(function(f){ return f.comment; }); // with explicit comment fields, only those get a comment box
   var h = V.remote ? remoteHead(t, cnt) : '<div class="ff-crumb"><button class="ff-link" data-act="back">‹ ' + esc(t.name) + '</button></div>' +
     '<label class="ff-lab">Name of this one<input class="ff-in" data-in="ftitle" value="' + esc(fl.title) + '" maxlength="80"></label>' +
-    '<div class="ff-prog ff-muted ff-small">' + cnt[0] + ' of ' + cnt[1] + ' filled · saved on this device</div>';
-  if(!V.remote && V.send && V.sendTop && !V.send.made) h += '<div class="card ff-send ff-sendtop"><div class="ff-small"><b>Fill in your part below</b> (your name, date, site, cases and your signature), then enter who receives it in <b>Send to preceptor</b> at the bottom.</div><div class="ff-row"><button class="action secondary" data-act="sendjump">Go to Send to preceptor</button></div></div>';
+    (inSendMode(t) ? '<div class="ff-prog ff-muted ff-small ff-sendprog">Send to preceptor: fill in the details. Your preceptor scores the evaluation.</div>' : '<div class="ff-prog ff-muted ff-small">' + cnt[0] + ' of ' + cnt[1] + ' filled · saved on this device</div>');
+  if(!V.remote && V.send && V.sendTop && !V.send.made && !isEvalForm(t)) h += '<div class="card ff-send ff-sendtop"><div class="ff-small"><b>Fill in your part below</b> (your name, date, site, cases and your signature), then enter who receives it in <b>Send to preceptor</b> at the bottom.</div><div class="ff-row"><button class="action secondary" data-act="sendjump">Go to Send to preceptor</button></div></div>';
   if(t.legend) h += '<div class="ff-scale">' + t.legend.map(function(s){ return '<span><b>' + esc(s[0]) + '</b> ' + esc(s[1]) + '</span>'; }).join('') + '</div>';
   if(t.instructions) h += '<div class="panel-hint">' + esc(t.instructions) + '</div>';
-  var shownF = t.fields.filter(function(f){ return f.type !== 'skip'; }), secs = [], by = {};
+  var sendMode = inSendMode(t), dIds = sendMode ? detailIds(t) : null;
+  var shownF = t.fields.filter(function(f){ return f.type !== 'skip' && (!dIds || dIds[f.id]) && !(V.remote && V.remote.hidden && V.remote.hidden[f.id]); }), secs = [], by = {};
   shownF.forEach(function(f){ var k = f.section || ''; if(!(k in by)){ by[k] = []; secs.push(k); } by[k].push(f); });
   h += '<div class="ff-qs">';
   var fieldsHtml = function(fs){ var out = '', grid = ''; fs.forEach(function(f){ if(f.short && (f.type === 'text' || f.type === 'date')) grid += fieldHtml(f, fl.values[f.id], fl); else { if(grid){ out += '<div class="ff-grid">' + grid + '</div>'; grid = ''; } out += fieldHtml(f, fl.values[f.id], fl); } }); return out + (grid ? '<div class="ff-grid">' + grid + '</div>' : ''); };
@@ -1492,6 +1494,7 @@ function viewFill(){
       fieldsHtml(fs) + '</details>';
   });
   if(V.remote) return h + '</div>' + remoteFoot(t, fl);
+  if(sendMode) return h + '</div>' + sendHtml(t, fl);
   h += '</div><div class="ff-export card">' + (V.review ? reviewHtml(t, fl) : '') +
     '<label class="ff-lab" for="ffName">File name</label><div class="ff-namerow"><input class="ff-in" id="ffName" data-in="fname" value="' + esc(cleanName(fl.fileName) || defaultName(t, fl)) + '" maxlength="100" autocomplete="off" spellcheck="false"><span class="ff-ext">' + outExt(t) + '</span></div>' +
     (t.kind === 'acro' ? '<label class="ff-opt"><input type="checkbox" data-in="flatten"' + (V.flatten ? ' checked' : '') + '> Lock the answers so they cannot be changed in the file</label>' : '') +
@@ -1606,12 +1609,28 @@ function viewRemoteMsg(){
   var m = V.remote && V.remote.msg || {};
   return '<div class="card ff-rhead ff-rdone"><div class="ff-h2">' + esc(m.title || '') + '</div><p>' + esc(m.body || '') + '</p>' + (m.small ? '<div class="panel-hint">' + esc(m.small) + '</div>' : '') + '</div>';
 }
+/* evaluations (forms with scores for the preceptor): before sending, the student fills only the details at the top
+   (date, names, semester, site, cases), never the scores. Care plans keep the student's whole plan. */
+function isEvalForm(t){ return !!t && t.fields.some(function(f){ return f.who === 'preceptor' && f.type === 'rating'; }); }
+function detailIds(t){
+  var first = t.fields.find(function(x){ return x.type !== 'skip'; }), s0 = first ? (first.section || '') : '', out = {};
+  t.fields.forEach(function(f){ if(f.type !== 'skip' && f.who === 'student' && (f.section || '') === s0) out[f.id] = 1; });
+  return out;
+}
+function inSendMode(t){ return !V.remote && !!V.send && isEvalForm(t); }
 // what the student sends ahead: their own answers only (fields marked for the preceptor are left for the preceptor)
 function studentValues(t, fl){
+  if(isEvalForm(t)){ var keep = detailIds(t), o2 = {}; Object.keys(fl.values || {}).forEach(function(k){ if(keep[k.replace(/__c$/, '')]) o2[k] = fl.values[k]; }); return o2; }
   var out = {}, pre = {};
   t.fields.forEach(function(f){ if(f.who === 'preceptor') pre[f.id] = 1; });
   Object.keys(fl.values || {}).forEach(function(k){ var base = k.replace(/__c$/, ''); if(!pre[base]) out[k] = fl.values[k]; });
   return out;
+}
+// the student's empty details, listed above the send button (kept up to date while typing)
+function sendWarn(t, fl){
+  var dIds = isEvalForm(t) ? detailIds(t) : null;
+  var mine = t.fields.filter(function(f){ return f.who === 'student' && (!dIds || dIds[f.id]) && f.type !== 'check' && !f.optional && !/preceptor/i.test(f.label) && !hasValue(f, fl.values[f.id]); });
+  return mine.length ? '<div class="ff-review"><div class="ff-rv-t">Details not filled in</div><div class="ff-small">These are still empty: ' + mine.map(function(f){ return '<b>' + esc(f.label) + '</b>'; }).join(', ') + '. Fill them in above, or send it as it is.</div></div>' : '';
 }
 function sendHtml(t, fl){
   if(!canSend(t)) return '';
@@ -1627,9 +1646,8 @@ function sendHtml(t, fl){
       '<div class="panel-hint">Your preceptor emails the finished evaluation to <b>' + esc(l.to) + '</b>. The link works until ' + esc(fmtDate(l.expires)) + '. AnesPilot cannot see it or tell you when it is sent, so check with your coordinator.</div></div>';
   }
   var nm = S.name != null ? S.name : (fl.values.student || profName() || '');
-  var mine = t.fields.filter(function(f){ return f.who === 'student' && f.type !== 'check' && !f.optional && !/preceptor/i.test(f.label) && !hasValue(f, fl.values[f.id]); });
   return '<div class="card ff-send"><div class="ff-h3">Send to preceptor</div>' +
-    (mine.length ? '<div class="ff-review"><div class="ff-rv-t">Your part is not finished</div><div class="ff-small">Your preceptor cannot fill these, and you will not get the form back: ' + mine.map(function(f){ return '<b>' + esc(f.label) + '</b>'; }).join(', ') + '. Fill them first, or send it as it is.</div></div>' : '') +
+    '<div class="ff-sendwarn">' + sendWarn(t, fl) + '</div>' +
     '<label class="ff-lab" for="ffSendTo">Who receives the finished evaluation (email)</label><input class="ff-in" id="ffSendTo" data-in="sendto" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="' + esc(S.to || '') + '" placeholder="coordinator@school.edu">' +
     '<label class="ff-lab" for="ffSendTo2">Type the email again</label><input class="ff-in" id="ffSendTo2" data-in="sendto2" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(S.to2 || '') + '">' +
     '<label class="ff-lab" for="ffSendName">Your name (shown to your preceptor)</label><input class="ff-in" id="ffSendName" data-in="sendname" maxlength="80" value="' + esc(nm) + '">' +
@@ -1664,7 +1682,7 @@ async function createLink(){
 // a QR code of the link, made on the device (qr.js); null if the link is too long for one
 function qrHtml(url, label){
   if(typeof QR === 'undefined') return '';
-  try{ var q = QR.encode(url, {ecl: 'L'}); return '<div class="ff-qr"><div class="ff-qrbox">' + QR.svg(q, {border: 4, dark: '#000', light: '#fff', label: esc(label || 'QR code for the preceptor link')}) + '</div>' +
+  try{ var q = QR.encode(url, {ecl: 'L'}); return '<div class="ff-qrcode"><div class="ff-qrbox">' + QR.svg(q, {border: 4, dark: '#000', light: '#fff', label: esc(label || 'QR code for the preceptor link')}) + '</div>' +
     '<div class="ff-small ff-muted">Your preceptor scans this with their phone camera to open the form.</div></div>'; }
   catch(e){ return '<div class="ff-small ff-muted">This link is too long for a QR code (long answers). Share or copy the link instead.</div>'; }
 }
@@ -1756,7 +1774,8 @@ function setValue(fid, v, quiet){
   if(v === '' || v == null || v === false) delete fl.values[fid]; else fl.values[fid] = v;
   fl.updated = Date.now(); V._pending = {tid: t.id, list: list};
   clearTimeout(saveTimer); saveTimer = setTimeout(flush, quiet ? 0 : 350);
-  var c = countDone(t, fl.values), p = V.root && V.root.querySelector('.ff-prog'); if(p) p.textContent = c[0] + ' of ' + c[1] + ' filled · saved on this device';
+  var sw = V.send && V.root && V.root.querySelector('.ff-sendwarn'); if(sw) sw.innerHTML = sendWarn(t, fl);
+  var c = countDone(t, fl.values), p = V.root && V.root.querySelector('.ff-prog:not(.ff-sendprog)'); if(p) p.textContent = c[0] + ' of ' + c[1] + ' filled · saved on this device';
   if(!cleanName(fl.fileName)){ var ni = V.root && V.root.querySelector('#ffName'); if(ni && document.activeElement !== ni) ni.value = defaultName(t, fl); }
   V.preview = ''; var pv = V.root && V.root.querySelector('.ff-preview'); if(pv) pv.remove();
   refreshReview();
@@ -1903,7 +1922,7 @@ async function onClick(e){
     case 'sendpickclose': V.pick = false; render(true); break;
     case 'sendform': V.pick = false; flush(); newFill(id); if(V.view === 'fill'){ V.send = {}; V.sendTop = true; render(false); } break;
     case 'sendjump': flush(); render(true); var sj = V.root.querySelector('#ffSendTo'); if(sj){ sj.scrollIntoView({block: 'center', behavior: 'smooth'}); sj.focus({preventScroll: true}); } break;
-    case 'sendopen': flush(); V.send = {}; render(true); var sf = V.root.querySelector('#ffSendTo'); if(sf){ sf.scrollIntoView({block: 'center', behavior: 'smooth'}); sf.focus(); } break;
+    case 'sendopen': flush(); V.send = {}; if(isEvalForm(curFill().t)){ render(false); break; } render(true); var sf = V.root.querySelector('#ffSendTo'); if(sf) sf.scrollIntoView({block: 'center', behavior: 'smooth'}); break;
     case 'sendclose': V.send = null; V.sendTop = false; render(true); break;
     case 'sendgo': if(!V.busy) await createLink(); break;
     case 'sendshare': if(V.send && V.send.made) await shareUrl(V.send.made.url, V.send.made.tname); break;
@@ -1948,7 +1967,7 @@ async function onClick(e){
       el.parentNode.querySelectorAll('.ff-chip').forEach(function(c){ c.setAttribute('aria-pressed', 'false'); });
       if(!on) el.setAttribute('aria-pressed', 'true'); setValue(el.dataset.f, on ? '' : el.dataset.o);
       var rf = (curFill().t.fields || []).find(function(x){ return x.id === el.dataset.f; }) || {}, low = rf.lowOpts ? rf.lowOpts.indexOf(el.dataset.o) !== -1 : /^(Below|Not met|Unsatisfactory)$/i.test(el.dataset.o);
-      if(!on && low && !V.cOpen[el.dataset.f]){ V.cOpen[el.dataset.f] = true; flush(); render(true); var tb = V.root.querySelector('[data-f="' + el.dataset.f + '__c"]'); if(tb) tb.focus(); }
+      if(!on && low && !V.cOpen[el.dataset.f]){ V.cOpen[el.dataset.f] = true; flush(); render(true); } // the box opens; the keyboard waits until the box is tapped
       var sd = el.closest('details.ff-sec'); if(sd){ var cf2 = curFill(), sk = sd.dataset.sec.split('|').slice(1).join('|'), fsx = cf2.t.fields.filter(function(f){ return f.type !== 'skip' && (f.section || '') === sk; }), dn = fsx.filter(function(f){ return hasValue(f, cf2.f.values[f.id]); }).length, nn = sd.querySelector('.ff-sec-n'); if(nn){ nn.textContent = dn + ' / ' + fsx.length; nn.classList.toggle('ff-sec-done', dn === fsx.length); } }
       break;
     case 'tick':
@@ -2069,7 +2088,8 @@ function listen(root){
 function mountRemote(root, opts){
   var tpl = opts.tpl, prefill = opts.prefill || {}, locked = {};
   tpl.fields.forEach(function(f){ if(f.who === 'student' && !/preceptor/i.test(f.label)) locked[f.id] = 1; }); // the student's part is theirs alone, even if left blank
-  V.remote = {link: opts.link, tpl: tpl, buf: opts.buf || null, locked: locked};
+  var hidden = {}; if(isEvalForm(tpl)){ var dk = detailIds(tpl); tpl.fields.forEach(function(f){ if(f.who === 'student' && !dk[f.id]) hidden[f.id] = 1; }); }
+  V.remote = {link: opts.link, tpl: tpl, buf: opts.buf || null, locked: locked, hidden: hidden};
   Object.assign(V, {cat: catOf(tpl), tid: tpl.id, draft: null, busy: false, status: '', preview: '', review: false, confirm: null, send: null});
   var list = fillsGet(tpl.id), fl = list[0];
   if(!fl){ var now = Date.now(); fl = {id: uid(), title: tpl.name, created: now, updated: now, values: JSON.parse(JSON.stringify(prefill)), fileName: opts.fileName || ''}; list = [fl]; fillsPut(tpl.id, list); }

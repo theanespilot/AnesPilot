@@ -171,6 +171,9 @@ body.theme-dark .ff-root .ff-rv-n-empty{color:#ffcc66}
 .ff-root .ff-sendmain .ff-pickbtn{text-align:left;width:100%}
 .ff-root .ff-pickh{margin-top:12px}
 .ff-root .ff-sendtop{margin-bottom:12px}
-.ff-root .ff-qr{display:flex;flex-direction:column;align-items:center;gap:8px;margin:12px 0 4px;text-align:center}
+.ff-root .ff-qrcode{display:flex;flex-direction:column;align-items:center;gap:8px;margin:12px 0 4px;text-align:center}
 .ff-root .ff-qrbox{width:100%;max-width:300px;background:#fff;padding:6px;border-radius:12px;border:1px solid var(--border)}
 .ff-root .ff-qrbox svg{display:block;width:100%;height:auto}
+/* short rating choices (4 3 2 1 N/A, Above Meets Below N/O) always sit side by side, sharing the width */
+.ff-root .ff-qr .ff-chips.ff-chips-row,.ff-root .ff-chips.ff-chips-row{display:flex;flex-wrap:nowrap;gap:6px}
+.ff-root .ff-chips.ff-chips-row .ff-chip{flex:1 1 0;min-width:0;padding:8px 2px}
