@@ -1,0 +1,2 @@
+JSZip 3.10.1 (MIT) https://github.com/Stuk/jszip
+Shared with /eval/app/: pdf-lib (MIT), pdf.js (Apache-2.0)

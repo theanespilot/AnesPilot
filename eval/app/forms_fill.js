@@ -949,14 +949,13 @@ function acpTemplate(){
   S('Evidence and reflection');
   add('refs', 'References (APA; at least one current journal article)', 'long'); add('evidence', 'How the evidence changed your plan', 'long');
   add('reflection', 'After the case: how it went, what you would change, medications to review', 'long');
-  S('Review and signatures');
-  add('feedback', 'Preceptor feedback', 'long', {who: 'preceptor', badge: true});
-  add('sig_preceptor', 'Preceptor signature', 'signature', {who: 'preceptor', badge: true}); add('sig_student', 'Student signature', 'signature', {who: 'student', badge: true});
+  S('Signature');   // CAREPLAN-NO-PRECEPTOR-V1: the preceptor evaluation part (feedback and preceptor signature) was removed
+  add('sig_student', 'Student signature', 'signature');
   var hints = {'Case': 'COA D5: individualized care.', 'Patient assessment': 'COA D8 and D15: history, physical and preanesthetic assessment.', 'History and review of systems': 'COA D8 and D15.',
     'Labs and studies': 'COA D15 and D19.', 'Airway': 'COA D8 and D17.', 'Anesthetic plan': 'COA D17 and D14: a plan of care before anesthesia, based on evidence.',
     'Fluids and blood': 'COA D20: calculate, initiate and manage fluid and blood therapy.', 'Positioning and patient safety': 'COA D4: protect patients from iatrogenic complications.',
     'Complications': 'COA D22: recognize and manage complications.', 'Postoperative plan': 'COA D29: transfer of care.', 'Evidence and reflection': 'COA D14, D23 and D31.',
-    'Review and signatures': 'Preceptor review.'};
+    'Signature': 'Your signature.'};
   ACP_TPL = {id: ACP_ID, cat: 'acp', name: 'Anesthesia Care Plan (COA Standard D)', kind: 'builtin', builtin: true, fileName: 'AnesPilot form', fields: F, pages: [], secHints: hints,
     note: 'Organized by the COA graduate standards a care plan demonstrates (Standard D, effective January 1, 2026). The COA does not publish an official care plan template.',
     instructions: 'Never enter patient names, record numbers, dates of birth or other identifiers.'};
@@ -1348,7 +1347,7 @@ function viewList(){
   var nB = fillsGet(bt.id).length;
   h += '<div class="ff-h2">' + C.head + '</div><div class="card ff-item ff-coa"><button class="ff-item-main" data-act="open" data-id="' + bt.id + '"><span class="ff-item-n">' + esc(bt.name) + '</span>' +
     '<span class="ff-item-s">' + C.sub + ' · ' + nB + ' filled</span></button><button class="action" data-act="open" data-id="' + bt.id + '">Open</button></div>';
-  h += sendPickHtml(cat, C, bt);
+  if(cat !== 'acp') h += sendPickHtml(cat, C, bt);   // CAREPLAN-NO-PRECEPTOR-V1: only Daily Evaluations go to a preceptor
   h += linksHtml(cat);
   // 2. school code
   h += '<div class="ff-h2">Your school\'s forms</div><div class="card ff-school"><label class="ff-lab" for="ffCode">School code</label>' +
@@ -1380,7 +1379,7 @@ function viewList(){
     '<li>Rating tables are found when the scores (like 4 3 2 1 N/A, or Met / Not met) are printed above their columns.</li>' +
     '<li>For a photo, lay the page flat in good light and fill the frame. Names cannot be read from a photo, so you name the boxes once on the check screen, or tap <b>Add a box</b> to place your own.</li></ul></div>';
   // 4. program directors: schools are added by AnesPilot (PRECEPTOR-LINK-V2)
-  h += '<div class="card ff-dir"><div class="ff-h3">For program directors</div><div class="panel-hint">Want your program\'s evaluation and care plan forms in AnesPilot, with a school code for your students and a link they can send to preceptors? Contact AnesPilot at <a href="mailto:support@anespilot.com">support@anespilot.com</a> and we will add them for you.</div></div>';
+  h += '<div class="card ff-dir"><div class="ff-h3">For program directors</div><div class="panel-hint">Want your program\'s evaluation and care plan forms in AnesPilot, with a school code for your students and evaluation links they can send to preceptors? Email <a href="mailto:support@anespilot.com?subject=Program%20forms%20for%20AnesPilot">support@anespilot.com</a> with your forms and we will add them for you.</div></div>';
   if(old) h += '<div class="card"><div class="ff-h3">Your earlier saved work</div><div class="panel-hint">Care plans and evaluations saved by an older version of this tab are still on this device.</div>' +
     '<button class="action secondary" data-act="olddl">Download earlier work (.json)</button></div>';
   return h;
@@ -1498,7 +1497,7 @@ function viewFill(){
   h += '</div><div class="ff-export card">' + (V.review ? reviewHtml(t, fl) : '') +
     '<label class="ff-lab" for="ffName">File name</label><div class="ff-namerow"><input class="ff-in" id="ffName" data-in="fname" value="' + esc(cleanName(fl.fileName) || defaultName(t, fl)) + '" maxlength="100" autocomplete="off" spellcheck="false"><span class="ff-ext">' + outExt(t) + '</span></div>' +
     (t.kind === 'acro' ? '<label class="ff-opt"><input type="checkbox" data-in="flatten"' + (V.flatten ? ' checked' : '') + '> Lock the answers so they cannot be changed in the file</label>' : '') +
-    '<div class="ff-row"><button class="action" data-act="export">' + (t.builtin ? 'Save as PDF' : 'Save filled ' + (t.kind === 'docx' ? 'Word file' : 'PDF')) + '</button>' + (t.kind !== 'docx' ? '<button class="action secondary" data-act="preview">Preview</button>' : '') + '</div>' +
+    '<div class="ff-row"><button class="action" data-act="export">' + (t.builtin ? 'Save as PDF' : 'Save filled ' + (t.kind === 'docx' ? 'Word file' : 'PDF')) + '</button><button class="action secondary" data-act="share">Share</button>' + (t.kind !== 'docx' ? '<button class="action secondary" data-act="preview">Preview</button>' : '') + '</div>' +
     '<div class="ff-status" role="status" aria-live="polite">' + esc(V.status) + '</div>' + (V.preview || '') +
     '<div class="panel-hint">The file is made on this device and opens the share sheet: save it to Files, AirDrop it, or attach it to an email. Check every answer before you submit.</div></div>' +
     sendHtml(t, fl);
@@ -1521,7 +1520,8 @@ function linksPut(l){ return put('links', l); }
 function schoolOf(t){ return t && t.schoolHash ? schools().find(function(s){ return s.hash === t.schoolHash; }) : null; }
 function canSend(t){
   if(!t) return false;
-  if(t.id === COA_ID || t.id === ACP_ID) return true;
+  if(catOf(t) === 'acp') return false;   // CAREPLAN-NO-PRECEPTOR-V1: care plans are shared by the student, not sent for evaluation
+  if(t.id === COA_ID) return true;
   var sc = schoolOf(t); return !!(t.school && sc && sc.code && builtInSealed(t.schoolHash));
 }
 function formKey(t){ return String(t.id).split('_').slice(2).join('_'); } // sch_<hash12>_<key>
@@ -1799,6 +1799,15 @@ async function originalBytes(t){
   if(t.size && buf.byteLength !== t.size) V.warn = 'This file is not the same as the one you set up, so check that every answer landed in the right place. ';
   await fileSave(t.id, buf, f.name); return buf;
 }
+// SHARE-FILE-V1: the device share sheet (Messages, Mail, AirDrop, Files...); falls back to saving the file
+async function shareOut(name, bytes, mime){
+  var file = null; try{ file = new File([bytes], name, {type: mime}); }catch(e){}
+  if(file && navigator.canShare && navigator.share){
+    var ok = false; try{ ok = navigator.canShare({files: [file]}); }catch(e){}
+    if(ok){ try{ await navigator.share({files: [file], title: name}); V.shareMsg = 'Shared. '; return true; }catch(e){ if(e && e.name === 'AbortError'){ V.shareMsg = 'Share canceled. '; return false; } } }
+  }
+  offer(name, bytes, mime); V.shareMsg = 'Sharing is not available here, so the file was saved instead. '; return false;
+}
 function offer(name, bytes, mime){
   var blob = new Blob([bytes], {type: mime}), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -1975,9 +1984,12 @@ async function onClick(e){
     case 'sigclear': setValue(el.dataset.f, '', true); flush(); render(true); break;
     case 'reviewclose': V.review = false; render(true); break;
     case 'jump': jumpTo(el.dataset.f, !!el.dataset.cmt); break;
-    case 'exportnow': act = 'export'; V.checkedOk = true;
+    case 'share': V.shareOut = true; act = 'export';
+    // falls through
+    case 'exportnow': if(act === 'exportnow'){ act = 'export'; V.checkedOk = true; }
     // falls through
     case 'export': case 'preview':
+      if(act === 'export' && el.dataset.act === 'export') V.shareOut = false;
       if(V.busy) return;
       if(act === 'export' && !V.checkedOk){
         flush(); var ck = curFill(), rr = ck.t && ck.f ? fillCheck(ck.t, ck.f) : {empty: [], phi: []};
@@ -1992,9 +2004,9 @@ async function onClick(e){
           try{ V.remote.canShare = !!(navigator.canShare && navigator.share && navigator.canShare({files: [remoteFile()]})); }catch(e3){ V.remote.canShare = false; }
           V.status = ''; V.preview = curFill().t.kind !== 'docx' ? await pagesHtml(r.bytes, 1) : ''; V.busy = false; render(true);
           var so = V.root.querySelector('.ff-sendout'); if(so) so.scrollIntoView({block: 'start', behavior: 'smooth'}); break; }
-        if(r){ if(act === 'export'){ V.review = false; } if(act === 'export') offer(r.name, r.bytes, curFill().t.kind === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf');
-          V.status = (V.warn || '') + report(r) + (act === 'export' ? '' : V.remote ? ' Tap Make the PDF when it looks right.' : ' Tap Save filled PDF when it looks right.');
-          V.preview = curFill().t.kind !== 'docx' ? await pagesHtml(r.bytes, act === 'export' ? 2 : 6) : ''; }
+        if(r){ if(act === 'export'){ V.review = false; } if(act === 'export'){ var mt = curFill().t.kind === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'; if(V.shareOut){ V.shareOut = false; await shareOut(r.name, r.bytes, mt); } else offer(r.name, r.bytes, mt); }
+          V.status = (V.shareMsg || '') + (V.warn || '') + report(r) + (act === 'export' ? '' : V.remote ? ' Tap Make the PDF when it looks right.' : ' Tap Save filled PDF when it looks right.');
+          V.shareMsg = ''; V.preview = curFill().t.kind !== 'docx' ? await pagesHtml(r.bytes, act === 'export' ? 2 : 6) : ''; }
         else V.status = '';
       }catch(err){ V.status = 'The file could not be made: ' + ((err && err.message) || 'unknown error') + '.'; }
       V.busy = false; render(true); break;

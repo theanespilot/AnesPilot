@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="AnesPilot Forms in your browser: daily clinical evaluations and anesthesia care plans for nurse anesthesia students, on Android, Chromebooks and computers.">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b1f5c">
+<!-- connect-src 'none': this page cannot send anything anywhere; forms and answers stay in this browser on this device -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="/assets/logo-96.png">
+<link rel="apple-touch-icon" href="/assets/logo-600.png">
+<title>Forms · AnesPilot</title>
+<link rel="stylesheet" href="/eval/app/page.css">
+<link rel="stylesheet" href="/eval/app/forms_fill.css">
+<link rel="stylesheet" href="app/forms-page.css">
+</head>
+<body>
+<header class="top"><a class="brand" href="/" aria-label="AnesPilot home"><img class="logo-img" src="/assets/logo-96.png" alt="" width="28" height="28"><span>Anes<b>Pilot</b></span></a><div class="tag">Forms</div></header>
+<nav class="fp-tabs" aria-label="Forms">
+  <a href="#evaluations" id="fpTabEval" class="fp-tab">Daily Evaluations</a>
+  <a href="#careplans" id="fpTabAcp" class="fp-tab">Care Plans</a>
+</nav>
+<main id="content"><div id="root"><div class="card loading" role="status">Loading forms...</div></div></main>
+<footer class="foot">
+  Everything you enter stays in this browser on this device. AnesPilot does not receive it, and nothing syncs with the iPhone app.
+  Clearing your browser data deletes saved forms, so save each finished form as a PDF or Word file.<br>
+  AnesPilot is an educational tool. Never enter patient names or other identifiers. ·
+  <a href="/evaluations/">How Forms works</a> · <a href="/privacy/">Privacy</a> · <a href="/disclaimer/">Disclaimer</a> · <a href="mailto:support@anespilot.com">support@anespilot.com</a>
+</footer>
+<noscript><div class="card">Forms needs JavaScript. Turn it on in your browser settings and reload the page.</div></noscript>
+<script src="/eval/app/pdf-lib.min.js"></script>
+<script type="module" src="/eval/app/pdfjs-worker.js"></script>
+<script type="module" src="/eval/app/pdfjs.js"></script>
+<script src="app/jszip.min.js"></script>
+<script src="/eval/app/school-packs.js"></script>
+<script src="/eval/app/forms_fill.js"></script>
+<script src="app/forms-page.js"></script>
+</body>
+</html>
