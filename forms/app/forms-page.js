@@ -3,6 +3,7 @@
    school forms, which open only with their school code. Everything is kept in this browser (localStorage). */
 (function(){
   'use strict';
+  window.FF_WEB = true; // hides the app's "Forms on the web" card on the website itself
   var root = document.getElementById('root');
   var toastEl = null, toastT = 0;
   window.apToast = function(m){
